@@ -7,9 +7,10 @@
 #include <cryptopp/eax.h>
 #include <cryptopp/rijndael.h>
 #include <cryptopp/modes.h>
-// #include "password.h"
 #include <iostream>
 #include <fstream>
+#include <vector>
+#include <sstream>
 
 using namespace CryptoPP;
 using std::cout, std::cin, std::endl, std::string;
@@ -53,19 +54,6 @@ string verifyMasterPassword(SHA3_256 hash, string masterDigest)
     }
 }
 
-// void addPasswords()
-// {
-//     std::string input;
-//     std::cout << "Enter App/Website Name, Username, and Password separated by a single space, or exit to exit: " << std::endl;
-//     std::cin >> input;
-//     while (input != "exit")
-//     {
-//         Password newPw;
-//         newPw.readFromString(input);
-//         std::cout << "Enter App/Website Name, Username, and Password separated by a single space, or exit to exit: " << std::endl;
-//         cin >> input;
-//     }
-// }
 void addPasswords(string masterPW)
 {
     unsigned int iterations = 15000;
@@ -111,6 +99,54 @@ void addPasswords(string masterPW)
 
     oFS.close();
 }
+std::vector<string> splitString(string input)
+{
+    std::vector<string> output;
+    std::stringstream ss(input);
+    string temp;
+    while (std::getline(ss, temp, ' '))
+    {
+        output.push_back(temp);
+    }
+    return output;
+}
+void displayPasswords(string masterPW)
+{
+    unsigned int iterations = 15000;
+    char purpose = 0;
+    SecByteBlock derived(32);
+    PKCS5_PBKDF2_HMAC<SHA3_256> kdf;
+    kdf.DeriveKey(derived.data(), derived.size(), purpose, (byte *)masterPW.data(), masterPW.size(), NULL, 0, iterations);
+    EAX<AES>::Decryption decryptor;
+    HexDecoder decoder;
+    std::ifstream inFS;
+    string recovered;
+    string decoded;
+    string line;
+    std::vector<string> infoLine;
+    inFS.open("passwords.txt");
+    if (!inFS.is_open())
+    {
+        cout << "Error didnt open" << endl;
+    }
+    while (std::getline(inFS, line))
+    {
+        string recovered = "";
+        string decoded = "";
+        infoLine = splitString(line);
+        decoder.Attach(new StringSink(decoded));
+        decoder.Put((byte *)infoLine.at(2).data(), infoLine.at(2).size());
+        decoder.MessageEnd();
+
+        decryptor.SetKeyWithIV(derived.data(), 16, derived.data() + 16, 16);
+        AuthenticatedDecryptionFilter df(decryptor, new StringSink(recovered));
+        df.Put((byte *)decoded.data(), decoded.size());
+        df.MessageEnd();
+
+        cout << infoLine.at(0) << " " << infoLine.at(1) << " " << recovered << endl;
+    }
+    inFS.close();
+}
 
 int main()
 {
@@ -146,72 +182,16 @@ int main()
     inFS.close();
     cout << "Success!" << endl;
 
-    addPasswords(masterPw);
-    // unsigned int iterations = 15000;
-    // char purpose = 0;
-
-    // SecByteBlock derived(32);
-
-    // PKCS5_PBKDF2_HMAC<SHA3_256> kdf;
-    // kdf.DeriveKey(derived.data(), derived.size(), purpose, (byte *)masterPw.data(), masterPw.size(), NULL, 0, iterations);
-
-    // string plaintext = "Attack at dawn";
-    // string ciphertext;
-    // string recovered;
-
-    // // Key the cipher
-    // EAX<AES>::Encryption encryptor;
-    // encryptor.SetKeyWithIV(derived.data(), 16, derived.data() + 16, 16);
-
-    // AuthenticatedEncryptionFilter ef(encryptor, new StringSink(ciphertext));
-    // ef.Put((byte *)plaintext.data(), plaintext.size());
-    // ef.MessageEnd();
-
-    // // Key the cipher
-    // EAX<AES>::Decryption decryptor;
-    // decryptor.SetKeyWithIV(derived.data(), 16, derived.data() + 16, 16);
-
-    // AuthenticatedDecryptionFilter df(decryptor, new StringSink(recovered));
-    // df.Put((byte *)ciphertext.data(), ciphertext.size());
-    // df.MessageEnd();
-
-    // // Done with encryption and decryption
-
-    // // Encode various parameters
-    // HexEncoder encoder;
-    // string key, iv, cipher;
-
-    // encoder.Detach(new StringSink(key));
-    // encoder.Put(derived.data(), 16);
-    // encoder.MessageEnd();
-
-    // encoder.Detach(new StringSink(iv));
-    // encoder.Put(derived.data() + 16, 16);
-    // encoder.MessageEnd();
-
-    // encoder.Detach(new StringSink(cipher));
-    // encoder.Put((byte *)ciphertext.data(), ciphertext.size());
-    // encoder.MessageEnd();
-
-    // // Print stuff
-    // cout << "plaintext: " << plaintext << endl;
-    // cout << "key: " << key << endl;
-    // cout << "iv: " << iv << endl;
-    // cout << "ciphertext: " << cipher << endl;
-    // cout << "recovered: " << recovered << endl;
-
-    // std::cout << "1. See passwords\n2. Add passwords\n3. Exit" << std::endl;
-    // std::string selection;
-    // cin >> selection;
-    // if (selection == "3")
-    // {
-    //     return 0;
-    // }
-
-    // if (selection == "2")
-    // {
-    //     addPasswords();
-    // }
-
+    string selection;
+    cout << "1. Add Passwords\n2. See Passwords\n(else) Exit" << endl;
+    cin >> selection;
+    if (selection == "1")
+    {
+        addPasswords(masterPw);
+    }
+    else if (selection == "2")
+    {
+        displayPasswords(masterPw);
+    }
     return 0;
 }
